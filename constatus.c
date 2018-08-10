@@ -199,25 +199,28 @@ static int hide_page(struct page *pg) {
 
 static int add_gadget(struct constatus_module *module) {
 	void *tmp;
-	void *instance;
 
 	if (!module->init || !module->display || !module->callback) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	if (!(instance = module->init()))
-		return -1;
-
 	if (!(tmp = realloc(gadgets, (n_gadgets+1) * sizeof(*gadgets))))
 		return -1;
 	gadgets = tmp;
 
 	memset(gadgets + n_gadgets, '\0', sizeof(*gadgets));
-	gadgets[n_gadgets].instance = instance;
 	gadgets[n_gadgets].module = module;
 	gadgets[n_gadgets].height = module->height;
 	gadgets[n_gadgets].width = module->width;
+
+	set_gadget_context(gadgets + n_gadgets);
+	gadgets[n_gadgets].instance = module->init();
+	clear_gadget_context();
+
+	if (!gadgets[n_gadgets].instance)
+		return -1;
+
 	++n_gadgets;
 
 	return 0;
