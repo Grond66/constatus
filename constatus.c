@@ -184,7 +184,7 @@ static void setup_color_palate(void) {
 	if (!has_colors() || NEEDED_COLOR_PAIRS >= COLOR_PAIRS)
 		return;
 
-	if (init_pair(COLOR_PAIR_BANNER, COLOR_BLACK, COLOR_RED) == ERR ||
+	if (init_pair(COLOR_PAIR_BANNER, COLOR_GREEN, COLOR_BLUE) == ERR ||
 	    init_pair(COLOR_PAIR_ERR, COLOR_YELLOW, COLOR_RED) == ERR)
 		panicx("error initializing color pairs");
 }
@@ -192,11 +192,11 @@ static void setup_color_palate(void) {
 static void draw_banner() {
 	int i;
 
-	attron(COLOR_PAIR(COLOR_PAIR_BANNER));
+	attron(COLOR_PAIR(COLOR_PAIR_BANNER) | A_BOLD);
 	mvaddnstr(0, 0, BANNER_TEXT, screen_width);
 	for (i = const_strlen(BANNER_TEXT); i < screen_width; ++i)
 		addch(' ');
-	attroff(COLOR_PAIR(COLOR_PAIR_BANNER));
+	attroff(COLOR_PAIR(COLOR_PAIR_BANNER) | A_BOLD);
 }
 
 static void set_error_banner(const char *fmt, ...) {
