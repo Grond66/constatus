@@ -47,7 +47,7 @@ enum {
 	NEEDED_COLOR_PAIRS,
 };
 
-static int screen_height, screen_width;
+int screen_height, screen_width;
 static struct gadget *gadgets = NULL;
 static size_t n_gadgets = 0;
 static struct page *cur_page = NULL;
@@ -59,12 +59,25 @@ static int curses_active = 0;
 static char *home_dir = NULL;
 static char *conf_file = NULL;
 static char *module_dir = NULL;
+// for the benefit of cmod_*() functions so that they can tell what gadget
+// they're being called from
+struct gadget *current_gadget;
+// used by things like cmod_resize() to signal that the screen needs a redraw
+int need_redraw = 0;
+static struct message **messages = NULL;
+static size_t n_messages = 0;
+static size_t message_errors = 0;
+static int error_flag = 0;
 
 static int cleanup(void) {
 	if (curses_active && endwin() == ERR) {
 		warnx("error leaving curses mode; screen may be corrupt");
 		return EXIT_FAILURE;
 	}
+
+	// [TODO] [XXX] find a better way of conveying these to the user
+	for (int i = 0; i < n_messages; ++i)
+		printf("%s\n", messages[i]->text);
 
 	return EXIT_SUCCESS;
 }
@@ -87,6 +100,84 @@ static void panicx(const char *fmt, ...) {
 	va_start(args, fmt);
 
 	verrx(EXIT_FAILURE, fmt, args);
+}
+
+void log_message(const char *fmt, va_list args, enum message_type type) {
+	void *tmp;
+	int text_len;
+	struct timespec time;
+	struct message *msg;
+
+	if (!(tmp = realloc(messages, (n_messages + 1) * sizeof(*messages))))
+		goto err;
+	messages = tmp;
+
+	if ((text_len = vsnprintf(NULL, 0, fmt, args)) < 0)
+		goto err;
+
+	if (clock_gettime(CLOCK_REALTIME, &time))
+		goto err;
+
+	if (!(msg = malloc(sizeof(*msg) + text_len + 1)))
+		goto err;
+
+	msg->type = type;
+	msg->len = text_len;
+	msg->time = time;
+	vsnprintf(msg->text, text_len+1, fmt, args);
+
+	messages[n_messages++] = msg;
+
+	if (type == MSGTYPE_ERROR)
+		error_flag = 1;
+
+	return;
+
+   err:
+	++message_errors;
+	error_flag = 1;
+}
+
+void constatus_vmsg(const char *fmt, va_list args, enum message_type type) {
+	log_message(fmt, args, type);
+}
+
+void constatus_verr(const char *fmt, va_list args) {
+	log_message(fmt, args, MSGTYPE_ERROR);
+}
+
+void constatus_vinfo(const char *fmt, va_list args) {
+	log_message(fmt, args, MSGTYPE_INFO);
+}
+
+void constatus_msg(const char *fmt, enum message_type type, ...) {
+	va_list args;
+
+	va_start(args, type);
+
+	log_message(fmt, args, type);
+
+	va_end(args);
+}
+
+void constatus_err(const char *fmt, ...) {
+	va_list args;
+
+	va_start(args, fmt);
+
+	log_message(fmt, args, MSGTYPE_ERROR);
+
+	va_end(args);
+}
+
+void constatus_info(const char *fmt, ...) {
+	va_list args;
+
+	va_start(args, fmt);
+
+	log_message(fmt, args, MSGTYPE_INFO);
+
+	va_end(args);
 }
 
 static void setup_color_palate(void) {
@@ -227,8 +318,7 @@ static int add_gadget(struct constatus_module *module) {
 	return 0;
 }
 
-#define NUM_TEST_GADGETS		11
-static void place_gadgets(void) {
+void place_gadgets(void) {
 	int i;
 	int next_y = 1, next_x = 0;
 	int biggest_height = 0;
@@ -312,16 +402,30 @@ static void draw_current_page(void) {
 	if (!cur_page)
 		return;
 
-	LIST_FOR_EACH(&cur_page->gadgets, g, struct gadget, list)
+	LIST_FOR_EACH(&cur_page->gadgets, g, struct gadget, list) {
+		set_gadget_context(g);
 		g->module->display(g->instance, g->window);
+		clear_gadget_context();
+	}
+}
+
+static void redraw_screen(void) {
+	do {
+		need_redraw = 0;
+
+		clear();
+		draw_banner(screen_width);
+		draw_current_page();
+	} while (need_redraw);
+	// because draw_current_page() calls module->display() which can call
+	// cmod_resize() which means that we have to redraw the screen after
+	// it's done
 }
 
 static void update_layout_and_draw(void) {
-	clear();
-	draw_banner(screen_width);
-
 	place_gadgets();
-	draw_current_page();
+
+	redraw_screen();
 }
 
 static inline int timespec_lt(struct timespec *a, struct timespec *b) {
@@ -474,7 +578,10 @@ static int timespec_to_milis(struct timespec *ts, int *res) {
 static void callback_gadget(struct gadget *g) {
 	struct timespec now, delay;
 	struct wakeup w;
+
+	set_gadget_context(g);
 	delay = g->module->callback(g->instance, g->window);
+	clear_gadget_context();
 
 	if (clock_gettime(CLOCK_MONOTONIC, &now))
 		panic("error getting current time");
@@ -484,6 +591,22 @@ static void callback_gadget(struct gadget *g) {
 
 	if (queue_wakeup(&w))
 		panic("error queuing wakeup");
+
+	if (need_redraw) // cmod_resize() was called
+		redraw_screen();
+}
+
+// inform all gadgets of the current size of the screen, if they are interested
+static void trigger_resize_event(void) {
+	int i;
+
+	for (i = 0; i < n_gadgets; ++i)
+		if (gadgets[i].module->resize) {
+			set_gadget_context(gadgets + i);
+			gadgets[i].module->resize(gadgets[i].instance,
+						  screen_height, screen_width);
+			clear_gadget_context();
+		}
 }
 
 static int handle_keypress(void) {
@@ -504,6 +627,7 @@ static int handle_keypress(void) {
 	switch (c) {
 	case KEY_RESIZE:
 		getmaxyx(stdscr, screen_height, screen_width);
+		trigger_resize_event();
 		update_layout_and_draw();
 	break;
 	case KEY_LEFT:
@@ -521,9 +645,7 @@ static int handle_keypress(void) {
 			break;
 		}
 
-		clear();
-		draw_banner();
-		draw_current_page();
+		redraw_screen();
 	break;
 	case KEY_RIGHT:
 		if (!cur_page ||
@@ -540,9 +662,7 @@ static int handle_keypress(void) {
 			break;
 		}
 
-		clear();
-		draw_banner();
-		draw_current_page();
+		redraw_screen();
 	break;
 	default:
 		return 0;
@@ -760,6 +880,8 @@ int main(int argc, char **argv) {
 	setup_color_palate();
 	getmaxyx(stdscr, screen_height, screen_width);
 
+	trigger_resize_event();
+
 	update_layout_and_draw();
 	for (i = 0; i < n_gadgets; ++i)
 		callback_gadget(gadgets + i);
@@ -798,6 +920,8 @@ int main(int argc, char **argv) {
 
 	clear_pages();
 	free(gadgets);
+	if (messages)
+		free(messages);
 
 	return cleanup();
 }

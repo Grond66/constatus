@@ -80,6 +80,46 @@ struct page {
 	struct list gadgets;
 };
 
+enum message_type {
+	MSGTYPE_ERROR,
+	MSGTYPE_INFO,
+};
+
+struct message {
+	unsigned len;
+	struct timespec time;
+	enum message_type type;
+	char text[];
+};
+
+extern int screen_height, screen_width;
+extern int need_redraw;
+extern struct gadget *current_gadget;
+
+// {set,clear}_gadget_context(), used around calls into module callbacks to
+// set/unset current_module, so that cmod_*() functions can figure out what
+// context they are being called from
+inline static void set_gadget_context(struct gadget *g) {
+	current_gadget = g;
+}
+
+inline static void clear_gadget_context(void) {
+	current_gadget = NULL;
+}
+
+inline static struct gadget *get_gadget_context() {
+	return current_gadget;
+}
+
+extern void place_gadgets(void);
+extern void constatus_msg(const char *fmt, enum message_type type, ...);
+extern void constatus_vmsg(const char *fmt, va_list args,
+			   enum message_type type);
+extern void constatus_err(const char *fmt, ...);
+extern void constatus_verr(const char *fmt, va_list args);
+extern void constatus_info(const char *fmt, ...);
+extern void constatus_vinfo(const char *fmt, va_list args);
+
 #endif /* CONSTATUS_INTERNAL */
 
 // the interfaces exposed to client modules...
@@ -115,13 +155,18 @@ static inline struct timespec timespec_add(struct timespec *a,
 typedef void *(*constatus_init_func)(void);
 typedef struct timespec (*constatus_cb_func)(void *, WINDOW *);
 typedef void (*constatus_disp_func)(void *, WINDOW *);
+typedef void (*constatus_resize_func)(void *, int, int);
 struct constatus_module {
 	int height, width;
 	constatus_init_func init;
 	constatus_cb_func callback;
 	constatus_disp_func display;
+	constatus_resize_func resize;
 };
 #define CONSTATUS_MODULE		struct constatus_module module_table
 
+extern int cmod_resize(int height, int width);
+extern void cmod_err(const char *fmt, ...);
+extern void cmod_info(const char *fmt, ...);
 
 #endif /* _CONSTATUS_H_ */

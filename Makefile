@@ -2,11 +2,11 @@
 BINDIR ?= $(CURDIR)
 DEBUG ?=
 
-SRCS = constatus.c
+SRCS = constatus.c module_api.c
 HDRS = constatus.h
 
 CFLAGS = -Wall -pedantic $(shell pkg-config --cflags libconfig)
-LDFLAGS = -lm -lpanel -lcurses -ldl $(shell pkg-config --libs libconfig)
+LDFLAGS = -rdynamic -lm -lpanel -lcurses -ldl $(shell pkg-config --libs libconfig)
 
 .PHONY: all modules
 
