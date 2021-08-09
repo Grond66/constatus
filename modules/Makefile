@@ -2,15 +2,18 @@
 MODDIR = $(CURDIR)
 
 DEBUG ?=
-CFLAGS = -Wall -pedantic
-LDFLAGS = -lcurses
+LIBDIR ?= $(CURDIR)
+INCDIR ?= $(CURDIR)
+
+CFLAGS = -Wall -pedantic -I $(INCDIR)
+LDFLAGS = -lcurses -lm -lbatt -L $(LIBDIR)
 ARCH = $(shell uname -m)
 
 ifeq ($(ARCH), x86_64)
    override CFLAGS += -fPIC
 endif
 
-MODS = onoff clock
+MODS = onoff clock linux_battery
 MOD_OBJS = $(addprefix $(CURDIR)/,$(addsuffix .so,$(MODS)))
 
 .PHONY: modules
