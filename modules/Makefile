@@ -16,9 +16,12 @@ endif
 MODS = onoff clock linux_battery
 MOD_OBJS = $(addprefix $(MODDIR)/,$(addsuffix .so,$(MODS)))
 
-.PHONY: modules
+.PHONY: modules clean
 
 modules: $(MOD_OBJS)
+
+clean:
+	rm -f $(MOD_OBJS)
 
 $(MODDIR)/%.so: $(CURDIR)/%.c $(CURDIR)/../constatus.h
 	$(CC) $(CFLAGS) $(DEBUG) -I $(CURDIR)/.. -shared -o $@ $^ $(LDFLAGS)
