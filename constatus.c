@@ -297,7 +297,7 @@ static int hide_page(struct page *pg) {
 	return 0;
 }
 
-static int add_gadget(struct constatus_module *module) {
+static int add_gadget(struct constatus_module *module, const char *name) {
 	void *tmp;
 
 	if (!module->init || !module->display || !module->callback) {
@@ -313,6 +313,8 @@ static int add_gadget(struct constatus_module *module) {
 	gadgets[n_gadgets].module = module;
 	gadgets[n_gadgets].height = module->height;
 	gadgets[n_gadgets].width = module->width;
+	snprintf(gadgets[n_gadgets].name, sizeof(gadgets[n_gadgets].name),
+		 "%s", name);
 
 	set_gadget_context(gadgets + n_gadgets);
 	gadgets[n_gadgets].instance = module->init();
@@ -744,7 +746,7 @@ void load_gadget(const char *name) {
 		panicx("could not find symbol `module_table' in module file: %s",
 		     dlerror());
 
-	if (add_gadget(module))
+	if (add_gadget(module, name))
 		panicx("error adding module %s", name);
 }
 

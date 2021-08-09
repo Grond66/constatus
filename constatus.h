@@ -67,6 +67,7 @@ inline static int list_is_empty(struct list *l) {
 
 struct gadget {
 	struct list list;
+	char name[_POSIX_PATH_MAX+1];
 	int height, width;
 	int x, y;
 	struct constatus_module *module;
