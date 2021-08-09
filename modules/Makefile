@@ -14,11 +14,11 @@ ifeq ($(ARCH), x86_64)
 endif
 
 MODS = onoff clock linux_battery
-MOD_OBJS = $(addprefix $(CURDIR)/,$(addsuffix .so,$(MODS)))
+MOD_OBJS = $(addprefix $(MODDIR)/,$(addsuffix .so,$(MODS)))
 
 .PHONY: modules
 
 modules: $(MOD_OBJS)
 
-$(MODDIR)/%.so: $(MODDIR)/%.c $(MODDIR)/../constatus.h
+$(MODDIR)/%.so: $(CURDIR)/%.c $(CURDIR)/../constatus.h
 	$(CC) $(CFLAGS) $(DEBUG) -I $(CURDIR)/.. -shared -o $@ $^ $(LDFLAGS)
