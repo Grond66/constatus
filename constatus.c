@@ -23,6 +23,7 @@
 # error "constatus needs CLOCK_MONOTONIC to work properly"
 #endif
 
+#define CONSTATUS_INTERNAL
 #include "constatus.h"
 
 #define const_strlen(str)		(sizeof(str)-1)

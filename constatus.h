@@ -5,6 +5,11 @@
 #include <curses.h>
 #include <panel.h>
 #include <time.h>
+#include <stdarg.h>
+#include <limits.h>
+
+// all the stuff that's specific to the core program...
+#ifdef CONSTATUS_INTERNAL
 
 #define container_of(p, type, member)\
 	((type *)((uint8_t *)(p)-(size_t)&(((type *)0)->member)))
@@ -60,6 +65,25 @@ inline static int list_is_empty(struct list *l) {
 	     (cur) = (save),						\
 	     (save) = container_of((cur)->member.next, type, member))
 
+struct gadget {
+	struct list list;
+	int height, width;
+	int x, y;
+	struct constatus_module *module;
+	void *instance;
+	WINDOW *window;
+	PANEL *panel;
+};
+
+struct page {
+	struct list list;
+	struct list gadgets;
+};
+
+#endif /* CONSTATUS_INTERNAL */
+
+// the interfaces exposed to client modules...
+
 static inline struct timespec timespec_subtract(struct timespec *a,
 					        struct timespec *b) {
 	struct timespec ret;
@@ -99,19 +123,5 @@ struct constatus_module {
 };
 #define CONSTATUS_MODULE		struct constatus_module module_table
 
-struct gadget {
-	struct list list;
-	int height, width;
-	int x, y;
-	struct constatus_module *module;
-	void *instance;
-	WINDOW *window;
-	PANEL *panel;
-};
-
-struct page {
-	struct list list;
-	struct list gadgets;
-};
 
 #endif /* _CONSTATUS_H_ */
