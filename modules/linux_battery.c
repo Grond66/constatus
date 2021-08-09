@@ -87,6 +87,8 @@ static void display(void *instance, WINDOW *win) {
 	struct linux_battery_ctx *ctx = (struct linux_battery_ctx *) instance;
 	int i, j, msg_len, msg_start, percentile_len;
 	double percent;
+	enum batt_status status = BATT_UNKNOWN;
+	char left_status, right_status;
 
 	if (ctx->resize_error) {
 		draw_resize_error(ctx, win);
@@ -95,13 +97,15 @@ static void display(void *instance, WINDOW *win) {
 
 	for (i = 0; i < ctx->n_batts; ++i) {
 		if (batt_get_percentage(ctx->batts + i, &percent)) {
+			cmod_err("data unavailable for %s", ctx->batts[i].name);
 			draw_error_bar(ctx, win, i);
 			continue;
 		}
+		batt_get_status(ctx->batts + i, &status);
 
-		// 3 spaces for a floating point number formatted with % 3.0f
-		// and one space for a percent sign
-		msg_len = strlen(ctx->batts[i].name) + sizeof(": ")-1 + 3 + 1;
+		// 3 spaces for a floating point number formatted with % 3.0f,
+		// 2 spaces for status chars, and one space for a percent sign
+		msg_len = strlen(ctx->batts[i].name) + sizeof(": ")-1 + 3 + 2 + 1;
 		msg_start = lround((double)(ctx->cur_width - msg_len) / 2.0);
 
 		if (msg_start < 0) {
@@ -111,8 +115,26 @@ static void display(void *instance, WINDOW *win) {
 			continue;
 		}
 
-		snprintf(ctx->row + msg_start, msg_len + 1, "%s: %3.0f%%",
-			 ctx->batts[i].name, percent * 100);
+		switch (status) {
+		case BATT_FULL:
+			left_status = right_status = '=';
+		break;
+		case BATT_CHARGE:
+			left_status = '>';
+			right_status = '<';
+		break;
+		case BATT_DISCHARGE:
+			left_status = '<';
+			right_status = '>';
+		break;
+		case BATT_UNKNOWN:
+		default:
+			left_status = right_status = '?';
+		break;
+		}
+
+		snprintf(ctx->row + msg_start, msg_len + 1, "%s: %c%3.0f%%%c",
+			 ctx->batts[i].name, left_status, percent * 100, right_status);
 		memset(ctx->row, ' ', msg_start);
 		memset(ctx->row + msg_start + msg_len, ' ',
 		       ctx->cur_width - msg_start - msg_len);
