@@ -255,8 +255,16 @@ static void clear_pages(void) {
 	LIST_FOR_EACH_DELETE(&pages, cur_page, next_page, struct page, list) {
 		LIST_FOR_EACH_DELETE(&cur_page->gadgets, cur_gadget, next_gadget,
 				     struct gadget, list) {
-			del_panel(cur_gadget->panel);
-			delwin(cur_gadget->window);
+			if (cur_gadget->panel) {
+				del_panel(cur_gadget->panel);
+				cur_gadget->panel = NULL;
+			}
+
+			if (cur_gadget->window) {
+				delwin(cur_gadget->window);
+				cur_gadget->window = NULL;
+			}
+
 			list_del(&cur_gadget->list);
 		}
 		list_del(&cur_page->list);
